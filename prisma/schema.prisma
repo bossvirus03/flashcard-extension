@@ -1,0 +1,84 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  name              String?
+  picture           String?
+  googleId          String     @unique
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  flashcards        Flashcard[]
+  reviews           Review[]
+  
+  @@map("users")
+}
+
+model Deck {
+  id                String     @id @default(cuid())
+  name              String
+  description       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  flashcards        Flashcard[]
+  
+  @@map("decks")
+}
+
+model Flashcard {
+  id                String     @id @default(cuid())
+  userId            String
+  deckId            String?
+  
+  front             String     // Question/Prompt
+  back              String     // Answer
+  
+  // Spaced Repetition Variables (SM-2 Algorithm)
+  interval          Int        @default(1)      // Days until next review
+  easeFactor        Float      @default(2.5)    // Difficulty multiplier
+  repetitions       Int        @default(0)      // Number of successful reviews
+  nextReviewDate    DateTime   @default(now())
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  lastReviewedAt    DateTime?
+  
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deck              Deck?      @relation(fields: [deckId], references: [id], onDelete: SetNull)
+  reviews           Review[]
+  
+  @@index([userId])
+  @@index([deckId])
+  @@index([nextReviewDate])
+  @@index([userId, nextReviewDate])
+  @@map("flashcards")
+}
+
+model Review {
+  id                String     @id @default(cuid())
+  userId            String
+  flashcardId       String
+  
+  quality           Int
+  
+  reviewedAt        DateTime   @default(now())
+  
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcard         Flashcard  @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([flashcardId])
+  @@map("reviews")
+}
