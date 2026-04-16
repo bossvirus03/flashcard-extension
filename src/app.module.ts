@@ -5,8 +5,10 @@ import { FlashcardModule } from './flashcard/flashcard.module';
 import { ReviewModule } from './review/review.module';
 import { DeckModule } from './deck/deck.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { AppController } from './app.controller';
 
 @Module({
+  controllers: [AppController],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
