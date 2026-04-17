@@ -86,11 +86,16 @@ export class FlashcardService {
   }
 
   async getDueCards(userId: string, limit: number = 20) {
+    const now = new Date();
+
     return this.prisma.flashcard.findMany({
       where: {
         userId,
+        repetitions: {
+          gt: 0,
+        },
         nextReviewDate: {
-          lte: new Date(),
+          lte: now,
         },
       },
       orderBy: {
@@ -101,6 +106,8 @@ export class FlashcardService {
   }
 
   async getStats(userId: string) {
+    const now = new Date();
+
     const total = await this.prisma.flashcard.count({
       where: { userId },
     });
@@ -108,8 +115,11 @@ export class FlashcardService {
     const dueToday = await this.prisma.flashcard.count({
       where: {
         userId,
+        repetitions: {
+          gt: 0,
+        },
         nextReviewDate: {
-          lte: new Date(),
+          lte: now,
         },
       },
     });
@@ -117,9 +127,11 @@ export class FlashcardService {
     const learned = await this.prisma.flashcard.count({
       where: {
         userId,
-        // A card is only considered learned after it has been recalled at least twice.
         repetitions: {
-          gte: 2,
+          gt: 0,
+        },
+        nextReviewDate: {
+          gt: now,
         },
       },
     });
@@ -128,7 +140,7 @@ export class FlashcardService {
       total,
       dueToday,
       learned,
-      toLearn: total - learned,
+      toLearn: total - learned - dueToday,
     };
   }
 }
