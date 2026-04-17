@@ -21,6 +21,7 @@ model User {
   
   flashcards        Flashcard[]
   reviews           Review[]
+  lessons           Lesson[]
   
   @@map("users")
 }
@@ -70,6 +71,7 @@ model Review {
   id                String     @id @default(cuid())
   userId            String
   flashcardId       String
+  lessonId          String?
   
   quality           Int
   
@@ -77,8 +79,28 @@ model Review {
   
   user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   flashcard         Flashcard  @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  lesson            Lesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   
   @@index([userId])
   @@index([flashcardId])
+  @@index([lessonId])
   @@map("reviews")
+}
+
+model Lesson {
+  id                String     @id @default(cuid())
+  userId            String
+  flashcardIds      String[]
+  currentIndex      Int        @default(0)
+  completedAt       DateTime?
+  lastAccessedAt    DateTime   @default(now())
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews           Review[]
+
+  @@index([userId])
+  @@index([userId, completedAt])
+  @@map("lessons")
 }

@@ -3,11 +3,17 @@ import {
   IsInt,
   Min,
   Max,
+  IsOptional,
+  IsString,
 } from 'class-validator';
 
 export class CreateReviewDto {
   @IsNotEmpty()
   flashcardId!: string;
+
+  @IsOptional()
+  @IsString()
+  lessonId?: string;
 
   @IsNotEmpty()
   @IsInt()

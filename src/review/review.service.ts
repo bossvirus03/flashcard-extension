@@ -11,52 +11,92 @@ export class ReviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createReview(userId: string, createReviewDto: CreateReviewDto) {
-    const { flashcardId, quality } = createReviewDto;
+    const { flashcardId, quality, lessonId } = createReviewDto;
 
-    // Get the flashcard
-    const flashcard = await this.prisma.flashcard.findUnique({
-      where: { id: flashcardId },
+    return this.prisma.$transaction(async (tx) => {
+      const flashcard = await tx.flashcard.findUnique({
+        where: { id: flashcardId },
+      });
+
+      if (!flashcard || flashcard.userId !== userId) {
+        throw new Error('Flashcard not found');
+      }
+
+      const review = await tx.review.create({
+        data: {
+          userId,
+          flashcardId,
+          quality,
+          ...(lessonId ? { lessonId } : {}),
+        },
+      });
+
+      const updatedValues = this.calculateSM2(
+        flashcard.easeFactor,
+        flashcard.interval,
+        flashcard.repetitions,
+        quality,
+      );
+
+      const nextReviewDate = this.getNextReviewDate(updatedValues.interval);
+
+      const updatedFlashcard = await tx.flashcard.update({
+        where: { id: flashcardId },
+        data: {
+          easeFactor: updatedValues.easeFactor,
+          interval: updatedValues.interval,
+          repetitions: updatedValues.repetitions,
+          nextReviewDate,
+          lastReviewedAt: new Date(),
+        },
+      });
+
+      const updatedLesson = lessonId
+        ? await this.advanceLesson(tx, userId, lessonId, flashcardId)
+        : null;
+
+      return {
+        review,
+        flashcard: updatedFlashcard,
+        lesson: updatedLesson,
+      };
+    });
+  }
+
+  private async advanceLesson(
+    tx: any,
+    userId: string,
+    lessonId: string,
+    flashcardId: string,
+  ) {
+    const lesson = await tx.lesson.findFirst({
+      where: {
+        id: lessonId,
+        userId,
+        completedAt: null,
+      },
     });
 
-    if (!flashcard || flashcard.userId !== userId) {
-      throw new Error('Flashcard not found');
+    if (!lesson) {
+      return null;
     }
 
-    // Create the review entry
-    await this.prisma.review.create({
+    const currentFlashcardId = lesson.flashcardIds[lesson.currentIndex];
+    if (currentFlashcardId !== flashcardId) {
+      return lesson;
+    }
+
+    const nextIndex = lesson.currentIndex + 1;
+    const completed = nextIndex >= lesson.flashcardIds.length;
+
+    return tx.lesson.update({
+      where: { id: lesson.id },
       data: {
-        userId,
-        flashcardId,
-        quality,
+        currentIndex: Math.min(nextIndex, lesson.flashcardIds.length),
+        lastAccessedAt: new Date(),
+        ...(completed ? { completedAt: new Date() } : {}),
       },
     });
-
-    // Calculate new SM-2 values
-    const updatedValues = this.calculateSM2(
-      flashcard.easeFactor,
-      flashcard.interval,
-      flashcard.repetitions,
-      quality,
-    );
-
-    // Update flashcard with new spaced repetition values
-    const nextReviewDate = this.getNextReviewDate(updatedValues.interval);
-
-    const updated = await this.prisma.flashcard.update({
-      where: { id: flashcardId },
-      data: {
-        easeFactor: updatedValues.easeFactor,
-        interval: updatedValues.interval,
-        repetitions: updatedValues.repetitions,
-        nextReviewDate,
-        lastReviewedAt: new Date(),
-      },
-    });
-
-    return {
-      review: { userId, flashcardId, quality },
-      flashcard: updated,
-    };
   }
 
   /**

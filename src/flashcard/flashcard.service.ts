@@ -117,8 +117,9 @@ export class FlashcardService {
     const learned = await this.prisma.flashcard.count({
       where: {
         userId,
+        // A card is only considered learned after it has been recalled at least twice.
         repetitions: {
-          gte: 1,
+          gte: 2,
         },
       },
     });

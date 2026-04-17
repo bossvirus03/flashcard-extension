@@ -22,7 +22,10 @@ export class ReviewController {
     @Request() req: ExpressRequest,
     @Body() createReviewDto: CreateReviewDto,
   ) {
-    return this.reviewService.createReview((req as any).user.id, createReviewDto);
+    return this.reviewService.createReview(
+      (req as any).user.id,
+      createReviewDto,
+    );
   }
 
   @Get('history/:flashcardId')
