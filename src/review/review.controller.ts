@@ -1,3 +1,4 @@
+
 import {
   Controller,
   Post,
@@ -39,5 +40,9 @@ export class ReviewController {
   @Get('stats/today')
   async getTodayStats(@Request() req: ExpressRequest) {
     return this.reviewService.getTodayStats((req as any).user.id);
+  }
+    @Post('reset')
+  async resetProgress(@Request() req: ExpressRequest) {
+    return this.reviewService.resetUserProgress((req as any).user.id);
   }
 }

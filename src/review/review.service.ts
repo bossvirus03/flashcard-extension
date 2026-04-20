@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { CreateReviewDto } from './dto/review.dto';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@/prisma/prisma.service";
+import { CreateReviewDto } from "./dto/review.dto";
 
 /**
  * SM-2 Algorithm for Spaced Repetition
@@ -19,7 +19,7 @@ export class ReviewService {
       });
 
       if (!flashcard || flashcard.userId !== userId) {
-        throw new Error('Flashcard not found');
+        throw new Error("Flashcard not found");
       }
 
       const review = await tx.review.create({
@@ -100,12 +100,12 @@ export class ReviewService {
   }
 
   /**
-    * Improved SM-2 style scheduling
-    * Quality mapping:
-    * 0-2: Again (forgot)
-    * 3: Hard
-    * 4: Good
-    * 5: Easy
+   * Improved SM-2 style scheduling
+   * Quality mapping:
+   * 0-2: Again (forgot)
+   * 3: Hard
+   * 4: Good
+   * 5: Easy
    * @param currentEF Current ease factor
    * @param currentInterval Current interval in days
    * @param currentReps Current number of repetitions
@@ -142,13 +142,16 @@ export class ReviewService {
     const nextRepetitions = currentReps + 1;
     let nextInterval: number;
     if (nextRepetitions === 1) {
-      nextInterval = normalizedQuality === 3 ? 1 : normalizedQuality === 4 ? 2 : 3;
+      nextInterval =
+        normalizedQuality === 3 ? 1 : normalizedQuality === 4 ? 2 : 3;
     } else if (nextRepetitions === 2) {
-      nextInterval = normalizedQuality === 3 ? 3 : normalizedQuality === 4 ? 5 : 7;
+      nextInterval =
+        normalizedQuality === 3 ? 3 : normalizedQuality === 4 ? 5 : 7;
     } else {
       const qualityMultiplier =
         normalizedQuality === 3 ? 0.85 : normalizedQuality === 4 ? 1 : 1.25;
-      const multipliedInterval = currentInterval * nextEaseFactor * qualityMultiplier;
+      const multipliedInterval =
+        currentInterval * nextEaseFactor * qualityMultiplier;
       nextInterval = Math.max(1, Math.round(multipliedInterval));
     }
 
@@ -171,7 +174,25 @@ export class ReviewService {
     next.setHours(8, 0, 0, 0);
     return next;
   }
-
+  async resetUserProgress(userId: string) {
+    // Xóa toàn bộ review của user và reset trạng thái flashcard
+    return this.prisma.$transaction(async (tx) => {
+      // Xóa review
+      await tx.review.deleteMany({ where: { userId } });
+      // Reset flashcard
+      await tx.flashcard.updateMany({
+        where: { userId },
+        data: {
+          interval: 1,
+          easeFactor: 2.5,
+          repetitions: 0,
+          nextReviewDate: new Date(),
+          lastReviewedAt: null,
+        },
+      });
+      return { success: true };
+    });
+  }
   async getReviewHistory(userId: string, flashcardId: string) {
     return this.prisma.review.findMany({
       where: {
@@ -179,7 +200,7 @@ export class ReviewService {
         flashcardId,
       },
       orderBy: {
-        reviewedAt: 'desc',
+        reviewedAt: "desc",
       },
     });
   }
@@ -204,9 +225,7 @@ export class ReviewService {
     const totalReviews = reviews.length;
     const correctReviews = reviews.filter((r) => r.quality >= 3).length;
     const accuracy =
-      totalReviews > 0
-        ? Math.round((correctReviews / totalReviews) * 100)
-        : 0;
+      totalReviews > 0 ? Math.round((correctReviews / totalReviews) * 100) : 0;
 
     return {
       totalReviews,
