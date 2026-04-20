@@ -1,15 +1,15 @@
-import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator";
 
 export class CreateReviewDto {
   @IsString()
-  @IsUUID()
-  flashcardId!: string;
+  @IsNotEmpty({ message: "flashcardId must not be empty" })
+  flashcardId!: string; // ← Thêm dấu ! ở đây
 
   @IsBoolean()
-  isGotIt!: boolean;
+  isGotIt!: boolean; // ← Thêm dấu !
 
   @IsOptional()
   @IsString()
-  @IsUUID()
+  @IsNotEmpty()
   lessonId?: string;
 }
