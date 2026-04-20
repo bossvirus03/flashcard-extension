@@ -1,9 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import {
-  CreateFlashcardDto,
-  UpdateFlashcardDto,
-} from './dto/flashcard.dto';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@/prisma/prisma.service";
+import { CreateFlashcardDto, UpdateFlashcardDto } from "./dto/flashcard.dto";
 
 @Injectable()
 export class FlashcardService {
@@ -18,6 +15,23 @@ export class FlashcardService {
     });
   }
 
+  async getPracticeCards(userId: string, limit: number = 20) {
+    const allCards = await this.prisma.flashcard.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        front: true,
+        back: true,
+      },
+    });
+
+    // Shuffle ngẫu nhiên
+    return this.shuffleArray(allCards).slice(0, limit);
+  }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    return [...array].sort(() => Math.random() - 0.5);
+  }
   async findAll(userId: string, deckId?: string) {
     return this.prisma.flashcard.findMany({
       where: {
@@ -27,13 +41,13 @@ export class FlashcardService {
       include: {
         reviews: {
           orderBy: {
-            reviewedAt: 'desc',
+            reviewedAt: "desc",
           },
           take: 1,
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
     });
   }
@@ -44,7 +58,7 @@ export class FlashcardService {
       include: {
         reviews: {
           orderBy: {
-            reviewedAt: 'desc',
+            reviewedAt: "desc",
           },
         },
       },
@@ -62,7 +76,7 @@ export class FlashcardService {
     });
 
     if (!flashcard || flashcard.userId !== userId) {
-      throw new Error('Unauthorized');
+      throw new Error("Unauthorized");
     }
 
     return this.prisma.flashcard.update({
@@ -77,7 +91,7 @@ export class FlashcardService {
     });
 
     if (!flashcard || flashcard.userId !== userId) {
-      throw new Error('Unauthorized');
+      throw new Error("Unauthorized");
     }
 
     return this.prisma.flashcard.delete({
@@ -99,48 +113,36 @@ export class FlashcardService {
         },
       },
       orderBy: {
-        nextReviewDate: 'asc',
+        nextReviewDate: "asc",
       },
       take: limit,
     });
   }
 
   async getStats(userId: string) {
-    const now = new Date();
-
-    const total = await this.prisma.flashcard.count({
-      where: { userId },
-    });
-
-    const dueToday = await this.prisma.flashcard.count({
-      where: {
-        userId,
-        repetitions: {
-          gt: 0,
-        },
-        nextReviewDate: {
-          lte: now,
-        },
-      },
-    });
+    const total = await this.prisma.flashcard.count({ where: { userId } });
 
     const learned = await this.prisma.flashcard.count({
       where: {
         userId,
-        repetitions: {
-          gt: 0,
-        },
-        nextReviewDate: {
-          gt: now,
-        },
+        gotItCount: { gte: 7 },
+      },
+    });
+
+    const toReview = await this.prisma.flashcard.count({
+      where: {
+        userId,
+        OR: [
+          { gotItCount: { lt: 7 } },
+          { gotItCount: { equals: undefined } }, // quan trọng: xử lý thẻ cũ
+        ],
       },
     });
 
     return {
       total,
-      dueToday,
       learned,
-      toLearn: total - learned - dueToday,
+      toReview,
     };
   }
 }

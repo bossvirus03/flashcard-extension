@@ -2,16 +2,12 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import { CreateReviewDto } from "./dto/review.dto";
 
-/**
- * SM-2 Algorithm for Spaced Repetition
- * Based on https://en.wikipedia.org/wiki/Spaced_repetition#SM-2
- */
 @Injectable()
 export class ReviewService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createReview(userId: string, createReviewDto: CreateReviewDto) {
-    const { flashcardId, quality, lessonId } = createReviewDto;
+  async createReview(userId: string, dto: CreateReviewDto) {
+    const { flashcardId, isGotIt, lessonId } = dto;
 
     return this.prisma.$transaction(async (tx) => {
       const flashcard = await tx.flashcard.findUnique({
@@ -19,46 +15,29 @@ export class ReviewService {
       });
 
       if (!flashcard || flashcard.userId !== userId) {
-        throw new Error("Flashcard not found");
+        throw new Error("Flashcard not found or unauthorized");
       }
 
-      const review = await tx.review.create({
-        data: {
-          userId,
-          flashcardId,
-          quality,
-          ...(lessonId ? { lessonId } : {}),
-        },
-      });
-
-      const updatedValues = this.calculateSM2(
-        flashcard.easeFactor,
-        flashcard.interval,
-        flashcard.repetitions,
-        quality,
-      );
-
-      const nextReviewDate = this.getNextReviewDate(updatedValues.interval);
+      // Cập nhật gotItCount theo yêu cầu
+      const newGotItCount = isGotIt ? Math.min(7, flashcard.gotItCount + 1) : 0; // Study Again → reset về 0
 
       const updatedFlashcard = await tx.flashcard.update({
         where: { id: flashcardId },
         data: {
-          easeFactor: updatedValues.easeFactor,
-          interval: updatedValues.interval,
-          repetitions: updatedValues.repetitions,
-          nextReviewDate,
+          gotItCount: newGotItCount,
           lastReviewedAt: new Date(),
         },
       });
 
+      // Nếu có lesson thì advance index
       const updatedLesson = lessonId
         ? await this.advanceLesson(tx, userId, lessonId, flashcardId)
         : null;
 
       return {
-        review,
         flashcard: updatedFlashcard,
         lesson: updatedLesson,
+        gotItCount: newGotItCount,
       };
     });
   }
@@ -87,102 +66,47 @@ export class ReviewService {
     }
 
     const nextIndex = lesson.currentIndex + 1;
-    const completed = nextIndex >= lesson.flashcardIds.length;
+    const isCompleted = nextIndex >= lesson.flashcardIds.length;
 
     return tx.lesson.update({
       where: { id: lesson.id },
       data: {
         currentIndex: Math.min(nextIndex, lesson.flashcardIds.length),
         lastAccessedAt: new Date(),
-        ...(completed ? { completedAt: new Date() } : {}),
+        ...(isCompleted ? { completedAt: new Date() } : {}),
       },
     });
   }
 
-  /**
-   * Improved SM-2 style scheduling
-   * Quality mapping:
-   * 0-2: Again (forgot)
-   * 3: Hard
-   * 4: Good
-   * 5: Easy
-   * @param currentEF Current ease factor
-   * @param currentInterval Current interval in days
-   * @param currentReps Current number of repetitions
-   * @param quality Quality of response (0-5)
-   */
-  private calculateSM2(
-    currentEF: number,
-    currentInterval: number,
-    currentReps: number,
-    quality: number,
-  ) {
-    const normalizedQuality = Math.min(5, Math.max(0, Math.round(quality)));
-
-    // Again: forgot this card, reset repetition and bring it back soon
-    if (normalizedQuality <= 2) {
-      return {
-        easeFactor: this.clampEaseFactor(currentEF - 0.2),
-        interval: 1,
-        repetitions: 0,
-      };
-    }
-
-    // Hard / Good / Easy ease-factor adjustments
-    let easeDelta = 0;
-    if (normalizedQuality === 3) {
-      easeDelta = -0.15;
-    } else if (normalizedQuality === 5) {
-      easeDelta = 0.15;
-    }
-
-    const nextEaseFactor = this.clampEaseFactor(currentEF + easeDelta);
-
-    // Learning steps for early reps to stabilize memory.
-    const nextRepetitions = currentReps + 1;
-    let nextInterval: number;
-    if (nextRepetitions === 1) {
-      nextInterval =
-        normalizedQuality === 3 ? 1 : normalizedQuality === 4 ? 2 : 3;
-    } else if (nextRepetitions === 2) {
-      nextInterval =
-        normalizedQuality === 3 ? 3 : normalizedQuality === 4 ? 5 : 7;
-    } else {
-      const qualityMultiplier =
-        normalizedQuality === 3 ? 0.85 : normalizedQuality === 4 ? 1 : 1.25;
-      const multipliedInterval =
-        currentInterval * nextEaseFactor * qualityMultiplier;
-      nextInterval = Math.max(1, Math.round(multipliedInterval));
-    }
-
-    return {
-      easeFactor: Math.round(nextEaseFactor * 100) / 100,
-      interval: nextInterval,
-      repetitions: nextRepetitions,
-    };
+  // Lấy cards để Review: chỉ lấy những card chưa thuộc (gotItCount < 7)
+  // Thay thế phương thức getReviewCards cũ bằng đoạn này
+  async getReviewCards(userId: string, limit: number = 20) {
+    return this.prisma.flashcard.findMany({
+      where: {
+        userId,
+        // Lấy tất cả thẻ có gotItCount < 7 HOẶC gotItCount là null (thẻ cũ)
+        OR: [{ gotItCount: { lt: 7 } }, { gotItCount: undefined }],
+      },
+      select: {
+        id: true,
+        front: true,
+        back: true,
+        gotItCount: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
   }
 
-  private clampEaseFactor(value: number) {
-    return Math.min(3.0, Math.max(1.3, value));
-  }
-
-  private getNextReviewDate(intervalInDays: number) {
-    const next = new Date();
-    next.setDate(next.getDate() + Math.max(1, intervalInDays));
-
-    // Schedule at a consistent hour to reduce noisy due times.
-    next.setHours(8, 0, 0, 0);
-    return next;
-  }
+  // Reset toàn bộ tiến độ
   async resetUserProgress(userId: string) {
-    // Xóa toàn bộ review của user và reset trạng thái flashcard
     return this.prisma.$transaction(async (tx) => {
-      // Xóa review
       await tx.review.deleteMany({ where: { userId } });
-      // Reset flashcard
+
       await tx.flashcard.updateMany({
         where: { userId },
         data: {
+          gotItCount: 0,
           interval: 1,
           easeFactor: 2.5,
           repetitions: 0,
@@ -190,18 +114,8 @@ export class ReviewService {
           lastReviewedAt: null,
         },
       });
+
       return { success: true };
-    });
-  }
-  async getReviewHistory(userId: string, flashcardId: string) {
-    return this.prisma.review.findMany({
-      where: {
-        userId,
-        flashcardId,
-      },
-      orderBy: {
-        reviewedAt: "desc",
-      },
     });
   }
 
@@ -220,6 +134,7 @@ export class ReviewService {
           lt: tomorrow,
         },
       },
+      select: { quality: true },
     });
 
     const totalReviews = reviews.length;
@@ -227,10 +142,6 @@ export class ReviewService {
     const accuracy =
       totalReviews > 0 ? Math.round((correctReviews / totalReviews) * 100) : 0;
 
-    return {
-      totalReviews,
-      correctReviews,
-      accuracy,
-    };
+    return { totalReviews, correctReviews, accuracy };
   }
 }

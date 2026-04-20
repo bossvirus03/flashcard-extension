@@ -8,42 +8,60 @@ import {
   Put,
   UseGuards,
   Request,
-} from '@nestjs/common';
-import { Request as ExpressRequest } from 'express';
-import { DeckService } from './deck.service';
-import { CreateDeckDto, UpdateDeckDto } from './dto/deck.dto';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+  Patch,
+} from "@nestjs/common";
+import { Request as ExpressRequest } from "express";
+import { DeckService } from "./deck.service";
+import { CreateDeckDto, UpdateDeckDto } from "./dto/deck.dto";
+import { JwtAuthGuard } from "@/auth/guards/jwt-auth.guard";
+import { RequestWithUser } from "@/auth/dto/auth.dto";
 
-@Controller('decks')
+@Controller("decks")
 @UseGuards(JwtAuthGuard)
 export class DeckController {
   constructor(private readonly deckService: DeckService) {}
 
   @Post()
-  async create(@Request() req: ExpressRequest, @Body() createDeckDto: CreateDeckDto) {
-    return this.deckService.create((req as any).user.id, createDeckDto);
+  create(
+    @Request() req: RequestWithUser,
+    @Body() createDeckDto: CreateDeckDto,
+  ) {
+    return this.deckService.create(
+      req.user.id,
+      createDeckDto.name,
+      createDeckDto.description,
+    );
   }
 
   @Get()
-  async findAll() {
-    return this.deckService.findAll();
+  findAll(@Request() req: RequestWithUser) {
+    return this.deckService.findAll(req.user.id);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.deckService.findOne(id);
+  @Get(":id")
+  findOne(@Request() req: RequestWithUser, @Param("id") id: string) {
+    return this.deckService.findOne(id, req.user.id);
   }
 
-  @Put(':id')
-  async update(
-    @Param('id') id: string,
+  @Patch(":id")
+  update(
+    @Request() req: RequestWithUser,
+    @Param("id") id: string,
     @Body() updateDeckDto: UpdateDeckDto,
   ) {
-    return this.deckService.update(id, updateDeckDto);
+    if (!updateDeckDto.name) {
+      throw new Error("Deck name is required");
+    }
+    return this.deckService.update(
+      id,
+      req.user.id,
+      updateDeckDto.name,
+      updateDeckDto.description,
+    );
   }
 
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.deckService.remove(id);
+  @Delete(":id")
+  remove(@Request() req: RequestWithUser, @Param("id") id: string) {
+    return this.deckService.remove(id, req.user.id);
   }
 }

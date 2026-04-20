@@ -1,59 +1,39 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { CreateDeckDto, UpdateDeckDto } from './dto/deck.dto';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@/prisma/prisma.service";
 
 @Injectable()
 export class DeckService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, createDeckDto: CreateDeckDto) {
-    const deck = await this.prisma.deck.create({
-      data: createDeckDto,
+  async create(userId: string, name: string, description?: string) {
+    return this.prisma.deck.create({
+      data: { userId, name, description },
     });
-
-    return deck;
   }
 
-  async findAll() {
+  async findAll(userId: string) {
     return this.prisma.deck.findMany({
-      include: {
-        flashcards: {
-          select: {
-            id: true,
-          },
-        },
-      },
+      where: { userId },
+      include: { _count: { select: { flashcards: true } } },
+      orderBy: { createdAt: "desc" },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string) {
     return this.prisma.deck.findUnique({
-      where: { id },
-      include: {
-        flashcards: {
-          include: {
-            reviews: {
-              orderBy: {
-                reviewedAt: 'desc',
-              },
-              take: 1,
-            },
-          },
-        },
-      },
+      where: { id, userId },
+      include: { flashcards: true },
     });
   }
 
-  async update(id: string, updateDeckDto: UpdateDeckDto) {
+  async update(id: string, userId: string, name: string, description?: string) {
     return this.prisma.deck.update({
-      where: { id },
-      data: updateDeckDto,
+      where: { id, userId },
+      data: { name, description },
     });
   }
 
-  async remove(id: string) {
-    return this.prisma.deck.delete({
-      where: { id },
-    });
+  async remove(id: string, userId: string) {
+    return this.prisma.deck.delete({ where: { id, userId } });
   }
 }

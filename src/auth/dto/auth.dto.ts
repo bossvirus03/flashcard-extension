@@ -28,3 +28,13 @@ export class AuthResponseDto {
   picture!: string | null;
   access_token!: string;
 }
+
+
+export interface RequestWithUser {
+  user: {
+    id: string;
+    email: string;
+    name?: string;
+    picture?: string;
+  };
+}

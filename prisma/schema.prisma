@@ -11,76 +11,83 @@ datasource db {
 }
 
 model User {
-  id                String     @id @default(cuid())
-  email             String     @unique
-  name              String?
-  picture           String?
-  googleId          String     @unique
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  
-  flashcards        Flashcard[]
-  reviews           Review[]
-  lessons           Lesson[]
-  
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  picture   String?
+  googleId  String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  flashcards Flashcard[]
+  reviews    Review[]
+  lessons    Lesson[]
+  decks      Deck[]
+
   @@map("users")
 }
 
 model Deck {
-  id                String     @id @default(cuid())
-  name              String
-  description       String?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  
-  flashcards        Flashcard[]
-  
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcards Flashcard[]
+
+  @@unique([userId, name])
   @@map("decks")
 }
 
 model Flashcard {
-  id                String     @id @default(cuid())
-  userId            String
-  deckId            String?
-  
-  front             String     // Question/Prompt
-  back              String     // Answer
-  
-  // Spaced Repetition Variables (SM-2 Algorithm)
-  interval          Int        @default(1)      // Days until next review
-  easeFactor        Float      @default(2.5)    // Difficulty multiplier
-  repetitions       Int        @default(0)      // Number of successful reviews
-  nextReviewDate    DateTime   @default(now())
-  
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  lastReviewedAt    DateTime?
-  
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deck              Deck?      @relation(fields: [deckId], references: [id], onDelete: SetNull)
-  reviews           Review[]
-  
+  id     String  @id @default(cuid())
+  userId String
+  deckId String?
+
+  front String // Question/Prompt
+  back  String // Answer
+
+  // === THÊM FIELD MỚI CHO YÊU CẦU MỚI ===
+  gotItCount Int @default(0) // Số lần "Got It"
+
+  // Giữ lại các field SR cũ (có thể dần bỏ sau nếu không dùng)
+  interval       Int      @default(1)
+  easeFactor     Float    @default(2.5)
+  repetitions    Int      @default(0)
+  nextReviewDate DateTime @default(now())
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastReviewedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deck    Deck?    @relation(fields: [deckId], references: [id], onDelete: SetNull)
+  reviews Review[]
+
   @@index([userId])
   @@index([deckId])
   @@index([nextReviewDate])
-  @@index([userId, nextReviewDate])
+  @@index([userId, gotItCount]) // tối ưu query review
   @@map("flashcards")
 }
 
 model Review {
-  id                String     @id @default(cuid())
-  userId            String
-  flashcardId       String
-  lessonId          String?
-  
-  quality           Int
-  
-  reviewedAt        DateTime   @default(now())
-  
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  flashcard         Flashcard  @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
-  lesson            Lesson?    @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  
+  id          String  @id @default(cuid())
+  userId      String
+  flashcardId String
+  lessonId    String?
+
+  quality Int
+
+  reviewedAt DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  lesson    Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([flashcardId])
   @@index([lessonId])
@@ -88,17 +95,17 @@ model Review {
 }
 
 model Lesson {
-  id                String     @id @default(cuid())
-  userId            String
-  flashcardIds      String[]
-  currentIndex      Int        @default(0)
-  completedAt       DateTime?
-  lastAccessedAt    DateTime   @default(now())
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  id             String    @id @default(cuid())
+  userId         String
+  flashcardIds   String[]
+  currentIndex   Int       @default(0)
+  completedAt    DateTime?
+  lastAccessedAt DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviews           Review[]
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews Review[]
 
   @@index([userId])
   @@index([userId, completedAt])

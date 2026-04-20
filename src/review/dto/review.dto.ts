@@ -1,23 +1,15 @@
-import {
-  IsNotEmpty,
-  IsInt,
-  Min,
-  Max,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateReviewDto {
-  @IsNotEmpty()
+  @IsString()
+  @IsUUID()
   flashcardId!: string;
+
+  @IsBoolean()
+  isGotIt!: boolean;
 
   @IsOptional()
   @IsString()
+  @IsUUID()
   lessonId?: string;
-
-  @IsNotEmpty()
-  @IsInt()
-  @Min(0)
-  @Max(5)
-  quality!: number; // 0-2 Again, 3 Hard, 4 Good, 5 Easy
 }
