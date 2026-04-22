@@ -78,23 +78,32 @@ export class ReviewService {
     });
   }
 
-  // Lấy cards để Review: chỉ lấy những card chưa thuộc (gotItCount < 7)
-  // Thay thế phương thức getReviewCards cũ bằng đoạn này
+  // Lấy cards để Review: random 20 thẻ chưa thuộc (gotItCount < 7)
   async getReviewCards(userId: string, limit: number = 20) {
-    return this.prisma.flashcard.findMany({
+    // Lấy tất cả id đủ điều kiện
+    const allIds = await this.prisma.flashcard.findMany({
       where: {
         userId,
-        // Lấy tất cả thẻ có gotItCount < 7 HOẶC gotItCount là null (thẻ cũ)
         OR: [{ gotItCount: { lt: 7 } }, { gotItCount: undefined }],
       },
+      select: { id: true },
+    });
+    if (allIds.length === 0) return [];
+    // Random chọn limit id
+    const shuffled = allIds
+      .map((x) => ({ ...x, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .slice(0, limit)
+      .map((x) => x.id);
+    // Lấy chi tiết các thẻ đó
+    return this.prisma.flashcard.findMany({
+      where: { id: { in: shuffled } },
       select: {
         id: true,
         front: true,
         back: true,
         gotItCount: true,
       },
-      orderBy: { createdAt: "desc" },
-      take: limit,
     });
   }
 
